@@ -1,0 +1,330 @@
+# %% [code] {"scrolled":true,"_kg_hide-output":false}
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+import matplotlib.pyplot as plt #import matplotlib
+from plotly import tools
+import pylab
+import plotly.plotly as py
+import plotly.graph_objs as go
+import os
+# import package with helper functions 
+from google.cloud import bigquery
+import bq_helper
+
+# create a helper object for this dataset
+baseball = bq_helper.BigQueryHelper(active_project="bigquery-public-data",
+                                   dataset_name="baseball")
+baseball.list_tables()
+
+# %% [code] {"scrolled":false}
+reg_pitch = """SELECT  pitchSpeed
+              FROM `bigquery-public-data.baseball.games_wide`
+              WHERE pitchType='FA' and 80<pitchSpeed and pitchSpeed<105
+              order by pitchSpeed
+              """
+post_pitch= """SELECT  pitchSpeed
+              FROM `bigquery-public-data.baseball.games_post_wide`
+              WHERE pitchType='FA' and 80<pitchSpeed and pitchSpeed<105
+              order by pitchSpeed
+              """
+reg_fast_ball =baseball.query_to_pandas_safe(reg_pitch)
+post_fast_ball=baseball.query_to_pandas_safe(post_pitch)
+
+
+tools.set_credentials_file(username='RyoPy', api_key='CTOhVB6dJ18662hrda3Y')
+
+regularseason= go.Histogram(
+    name="Regularseason",
+    x=reg_fast_ball.pitchSpeed,histnorm="percent" ,opacity=0.75, marker=dict(
+    color='#d35e60')
+)
+postseason = go.Histogram(
+    name="Postseason",
+    x=post_fast_ball.pitchSpeed,histnorm="percent",opacity=0.75,marker=dict(
+    color='#FADA5E')
+)
+
+data = [regularseason, postseason]
+reg_annotations=[dict(x=int(reg_fast_ball.pitchSpeed.mode()),
+                       y=reg_fast_ball.pitchSpeed.loc[reg_fast_ball.pitchSpeed == int(reg_fast_ball.pitchSpeed.mode())].count()
+                      /len(reg_fast_ball.pitchSpeed)*100,
+                       text='Regular Season Mode and Median : '+str(int(reg_fast_ball.pitchSpeed.mode())),
+                      showarrow=True,
+                      arrowhead=7,
+                 xref='x', yref='y',
+                 ax=-50, ay=-50),dict(x=int(reg_fast_ball.pitchSpeed.mean()),
+                       y=0,
+                      xref='x', yref='y',
+                       showarrow=True,
+                       arrowhead=7,
+                      text='Regular Season Mean: '+str(round(reg_fast_ball.pitchSpeed.mean(),2)),
+                      ax=-70, ay=50)]
+post_annotations=[dict(x=int(post_fast_ball.pitchSpeed.mode()),
+                       y=post_fast_ball.pitchSpeed.loc[post_fast_ball.pitchSpeed == int(post_fast_ball.pitchSpeed.mode())].count()
+                       /len(post_fast_ball.pitchSpeed)*100,
+                      xref='x', yref='y',
+                       showarrow=True,
+                       arrowhead=7,
+                      text='Post Season Mode and Median: '+str(int(post_fast_ball.pitchSpeed.mode())),
+                      ax=50, ay=-50),
+                 dict(x=int(post_fast_ball.pitchSpeed.mean()),
+                       y=0,
+                      xref='x', yref='y',
+                       showarrow=True,
+                       arrowhead=7,
+                      text='Post Season Mean: '+str(round(post_fast_ball.pitchSpeed.mean(),2)),
+                      ax=70, ay=50)]   
+
+updatemenus = list([
+    dict(type="buttons",
+         active=-1,
+         buttons=list([
+            dict(label = 'Regular Season',
+                 method = 'update',
+                 args = [{'visible': [True, False]},
+                         {'title': 'Percentage of fastball velocity during regular season',
+                          'annotations': reg_annotations}]),
+            dict(label = 'Post Season',
+                 method = 'update',
+                 args = [{'visible': [False, True]},
+                         {'title': 'Percentage of fastball velocity during post season',
+                          'annotations': post_annotations}]),
+            dict(label = 'Both',
+                 method = 'update',
+                 args = [{'visible': [True, True]},
+                         {'title': 'Percentage of fastball velocity during regular season and post season ',
+                          'annotations': reg_annotations+post_annotations}])
+        ]),
+    )
+])
+layout = go.Layout(title="Percentage of fastball velocity during regular season and post season",barmode='overlay',bargap=0.2,updatemenus=updatemenus,xaxis= dict(
+        title= 'Velocity of baseball pitch',
+        ticklen= 5, range = [80, 105],
+        autorange=True,
+        zeroline= False,
+        gridwidth= 2,
+    
+    ),yaxis= dict(
+        title= 'Percentage',
+        ticklen= 5,
+    range = [0, 18],
+        autorange=True,
+        zeroline= False,
+        gridwidth= 2,
+    ))
+
+fig = go.Figure(data=data, layout=layout)
+
+
+py.iplot(fig)
+
+
+# %% [code] {"scrolled":true}
+Rballcount="""SELECT max(durationMinutes) as Duration,gameID,COUNT(atBatEventType) as number_of_pitches
+              FROM `bigquery-public-data.baseball.games_wide`
+              WHERE atBatEventType="PITCH"
+              group by gameID
+              order by gameID
+              """
+Pballcount="""SELECT max(durationMinutes) as Duration,gameID,COUNT(atBatEventType) as number_of_pitches
+              FROM `bigquery-public-data.baseball.games_post_wide`
+              WHERE atBatEventType="PITCH"
+              group by gameID
+              order by gameID
+              """
+
+Pcount_ball = baseball.query_to_pandas_safe(Pballcount)
+Rcount_ball = baseball.query_to_pandas_safe(Rballcount)
+
+
+# %% [code]
+tools.set_credentials_file(username='RyoPy', api_key='CTOhVB6dJ18662hrda3Y')
+
+regularseason= go.Scatter(
+    name="Regularseason",
+    x=Rcount_ball.number_of_pitches,y=Rcount_ball.Duration,mode="markers",marker = dict(
+        size = 10,color='#CCCCFF',
+       
+        line = dict(
+            width = 1,
+        )))
+postseason = go.Scatter(
+    name="Postseason",
+    x=Pcount_ball.number_of_pitches,y=Pcount_ball.Duration,mode="markers",marker = dict(
+        size = 10,color='#B42F32',symbol="square",
+       
+        line = dict(
+            width = 1,
+        )))
+
+
+data = [regularseason, postseason]
+high_annotations=[]
+low_annotations=[]
+updatemenus = list([
+    dict(type="buttons",
+         active=-1,
+         buttons=list([
+            dict(label = 'Regular Season',
+                 method = 'update',
+                 args = [{'visible': [True,  False,]},
+                         {'title': 'Relationship between the number of pitches and duration of game during regular season',
+                          'annotations': high_annotations}]),
+            dict(label = 'Post Season',
+                 method = 'update',
+                 args = [{'visible': [False,True]},
+                         {'title': 'Relationship between the number of pitches and duration of game during post season',
+                          'annotations': low_annotations}]),
+            dict(label = 'Both',
+                 method = 'update',
+
+                 args = [{'visible': [True, True]},
+                         {'title': "Relationship between the number of pitches and duration of game during regular season and post season",
+                          'annotations': high_annotations+low_annotations}]),
+            
+        ]),
+    )
+])
+layout = go.Layout(title="Relationship between the number of pitches and duration of game",barmode='overlay')
+#fig = go.Figure(data=data, layout=layout,updatemenus=updatemenus)
+layout = go.Layout(title='Relationship between the number of pitches and duration of game during regular season and post season',
+              updatemenus=updatemenus,showlegend=True,xaxis= dict(
+        title= 'Number of pitches',
+        ticklen= 5,
+        zeroline= False,
+        gridwidth= 2,
+    ),
+    yaxis=dict(
+        title= 'Duration of game(min)',
+        ticklen= 5,
+        gridwidth= 2,
+    ))
+""",xaxis = dict(
+    autorange = True,
+    range = [100, 650],
+    showline = True,
+    
+  ),yaxis = dict(
+    autorange = True,
+    range = [0, 400],
+    showline = True,
+    
+  )"""
+fig = go.Figure(data=data, layout=layout)
+
+py.iplot(fig)
+
+
+
+# %% [code]
+balltype="""SELECT pitchTypeDescription ,gameID,atBatEventType 
+              FROM `bigquery-public-data.baseball.games_wide`
+              WHERE atBatEventType="PITCH"
+              order by gameID
+              """
+balltype1="""SELECT pitchTypeDescription ,gameID,atBatEventType 
+              FROM `bigquery-public-data.baseball.games_post_wide`
+              WHERE atBatEventType="PITCH"
+              order by gameID
+              """
+balltype = baseball.query_to_pandas_safe(balltype)
+balltype1 = baseball.query_to_pandas_safe(balltype1)
+
+# %% [code]
+
+y=balltype.groupby("pitchTypeDescription").count()
+y.columns=["frequency","frequency1"]
+y.loc["Other"]=y.loc["Other"]+y.loc["Pitchout"]+y.loc["Intentional Ball"]
+y=y.drop(["Pitchout","Intentional Ball"])
+
+y=y.sort_values("frequency",ascending=False)
+pitch_Type=list(y.index[:])
+y1=balltype1.groupby("pitchTypeDescription").count()
+y1.columns=["frequency","frequency1"]
+
+
+y1.loc["Other"]=y1.loc["Other"]+y1.loc["Pitchout"]+y1.loc["Intentional Ball"]
+y1=y1.drop(["Pitchout","Intentional Ball"])
+y1=y1.sort_values("frequency",ascending=False)
+pitch_Type1=list(y1.index[:])
+
+
+trace1 = go.Bar(
+    x=pitch_Type,
+    y=y.frequency/sum(y.frequency)*100,
+    name="RegularSeason",marker=dict(
+    color='#B42F32'
+))
+trace2 = go.Bar(
+    x=pitch_Type1,
+    y=y1.frequency/sum(y1.frequency)*100,
+    name='PostSeason',marker=dict(
+    color='#E3E3CD'))
+
+shadow=[
+        # 1st highlight during Feb 4 - Feb 6
+        {
+            'type': 'rect',
+            # x-reference is assigned to the x-values
+            'xref': 'paper',
+            # y-reference is assigned to the plot paper [0,1]
+            'yref': 'paper',
+            'x0': 1/11,
+            'y0': 0,
+            'x1': 3/11,
+            'y1': 1,
+            'fillcolor': '#d3d3d3',
+            'opacity': 0.2,
+            'line': {
+                'width': 1,
+            }
+        },
+{
+            'type': 'rect',
+            # x-reference is assigned to the x-values
+            'xref': 'paper',
+            # y-reference is assigned to the plot paper [0,1]
+            'yref': 'paper',
+            'x0': 5/11,
+            'y0': 0,
+            'x1': 6/11,
+            'y1': 1,
+            'fillcolor': '#d3d3d3',
+            'opacity': 0.2,
+            'line': {
+                'width': 1,
+            }
+        }]
+data = [trace1, trace2]
+updatemenus = list([
+    dict(type="buttons",
+         active=-1,
+         buttons=list([
+            dict(label = 'Highlighted Graph',
+                 method = 'relayout',
+                 args = [{ 'shapes':shadow}]),
+            dict(label = 'Reset',
+                 method = 'relayout',
+                 args = [ { 'shapes': []}])
+            
+        ])
+        )
+])
+layout = go.Layout(title="Pitchtypes during regular season and post season",
+    barmode='group',xaxis= dict(
+        title= 'Pitch Type',
+        ticklen= 5,
+        zeroline= False,
+        gridwidth= 2,
+    ),yaxis= dict(
+        title= 'Percentage',
+        ticklen= 5,
+        zeroline= False,
+        gridwidth= 2,
+    ),updatemenus=updatemenus
+)
+
+fig = go.Figure(data=data, layout=layout)
+py.iplot(fig)
+
+
